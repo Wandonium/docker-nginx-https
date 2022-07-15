@@ -1,0 +1,73 @@
+version: "2"
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: proxy
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - /etc/nginx/vhost.d
+      - /home/wando/docker-nginx-https/certs:/etc/nginx/certs:ro
+      - /usr/share/nginx/html
+    networks:
+      - proxy_net
+    labels:
+      - com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: encrypt
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - /home/wando/docker-nginx-https/certs:/etc/nginx/certs:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    volumes_from:
+      - nginx-proxy
+    networks:
+      - proxy_net
+  certs:
+    image: tutum/apache-php
+    container_name: certs
+    environment:
+      - VIRTUAL_HOST=designsos.org,www.designsos.org,a.designsos.org,b.designsos.org
+      - LETSENCRYPT_HOST=designsos.org,www.designsos.org,a.designsos.org,b.designsos.org
+      - LETSENCRYPT_EMAIL=hillarywando@gmail.com
+    networks:
+      - cert_net
+  site-a:
+    image: wandonium/site-a:latest
+    container_name: site-a
+    depends_on:
+      - nginx-proxy
+      - letsencrypt
+    environment:
+      - VIRTUAL_HOST=a.designsos.org
+    networks:
+      - proxy_net
+  site-b:
+    image: wandonium/site-b:latest
+    container_name: site-b
+    depends_on:
+      - nginx-proxy
+      - letsencrypt
+    environment:
+      - VIRTUAL_HOST=b.designsos.org
+    networks:
+      - proxy_net
+  default:
+    image: mikeq/hello-world:latest
+    container_name: www
+    depends_on:
+      - nginx-proxy
+      - letsencrypt
+    environment:
+      - VIRTUAL_HOST=designsos.org,www.designsos.org
+    networks:
+      - proxy_net
+networks:
+  cert_net:
+    driver: bridge
+  proxy_net:
+    driver: bridge
